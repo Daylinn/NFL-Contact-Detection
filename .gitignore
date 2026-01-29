@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+*.egg-info/
+
+# Large files
+*.mp4
+*.avi
+!demo/*.mp4
+*.csv
+!sample_data/*.csv
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
