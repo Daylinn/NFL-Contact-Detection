@@ -10,13 +10,13 @@ Covers:
   - Thumbnail extraction
 """
 
+from unittest.mock import MagicMock, patch
+
 import numpy as np
 import pandas as pd
 import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
 
 from src.create_video_overlay import NFLVideoOverlay
-
 
 # ===================================================================
 # Initialization

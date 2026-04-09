@@ -241,28 +241,28 @@ To prove the detection algorithm works, I built a video processing pipeline that
 ```bash
 git clone https://github.com/daylinhart/nfl-contact-detection.git
 cd nfl-contact-detection
-pip install -r requirements.txt
+pip install -e .           # Install package
+pip install -e ".[dev]"    # Install with dev/test dependencies
 ```
 
 ### Basic Usage (Tracking Data Only)
 
 ```python
-from src.nfl_contact_detector import detect_contacts_in_frame
+from src.nfl_contact_detector import NFLContactDetector
 import pandas as pd
 
 # Load your tracking data
 tracking = pd.read_csv('player_tracking.csv')
 
-# Detect contacts for a specific frame
-frame_data = tracking[tracking['time'] == selected_time]
-contacts = detect_contacts_in_frame(
-    frame_data,
-    distance_threshold=2.0,
-    decel_threshold=0.5
-)
+# Initialize detector with thresholds
+detector = NFLContactDetector(distance_threshold=2.0, decel_threshold=0.5)
+
+# Detect contacts across an entire play
+play_data = tracking[(tracking['gameKey'] == game) & (tracking['playID'] == play)]
+contacts_df = detector.detect_contacts_in_play(play_data)
 
 # View results
-for contact in contacts:
+for _, contact in contacts_df.iterrows():
     print(f"Contact between {contact['player1']} and {contact['player2']}")
     print(f"  Distance: {contact['distance']:.2f} yards")
     print(f"  Deceleration: {contact['max_decel']:.2f} yards/sec²")
@@ -271,13 +271,19 @@ for contact in contacts:
 ### Video Overlay (Optional - Requires Video)
 
 ```python
-from src.create_video_overlay import process_video
+from src.create_video_overlay import NFLVideoOverlay
+import pandas as pd
 
-# Add visual overlay to video
-process_video(
-    video_path='game_footage.mp4',
-    tracking_path='player_tracking.csv',
-    output_path='annotated_video.mp4'
+tracking = pd.read_csv('player_tracking.csv')
+overlay = NFLVideoOverlay(distance_threshold=2.0, decel_threshold=0.3)
+
+# Process tracking data and detect contacts
+play_data = overlay.process_tracking_data(tracking, game_key=58172, play_id=3247)
+contacts = overlay.detect_all_contacts(play_data)
+
+# Create annotated video
+frames, contact_frames = overlay.create_overlay_video(
+    'game_footage.mp4', play_data, contacts, 'annotated_output.mp4'
 )
 ```
 
@@ -286,20 +292,34 @@ process_video(
 ```
 nfl-contact-detection/
 ├── README.md                         # This file
+├── pyproject.toml                    # Build config, tool settings
 ├── requirements.txt                  # Dependencies
-├── LICENSE                          # MIT License
-├── .gitignore                       # Git ignore rules
+├── Makefile                          # Dev task runner
+├── LICENSE                           # MIT License
+├── .gitignore                        # Git ignore rules
+│
+├── .github/workflows/
+│   └── ci.yml                        # CI pipeline (test + lint)
 │
 ├── src/
-│   ├── nfl_contact_detector.py      # Core detection algorithm
-│   └── create_video_overlay.py      # Video visualization (optional)
+│   ├── __init__.py                   # Package init
+│   ├── nfl_contact_detector.py       # Core detection algorithm
+│   ├── create_video_overlay.py       # Video visualization (optional)
+│   └── detection_utils.py            # Shared detection logic & constants
+│
+├── tests/
+│   ├── conftest.py                   # Shared test fixtures
+│   ├── test_nfl_contact_detector.py  # Detector tests (25 tests)
+│   ├── test_create_video_overlay.py  # Overlay tests (28 tests)
+│   └── test_detection_utils.py       # Shared utility tests (19 tests)
 │
 ├── visualizations/
-│   ├── nfl_contact_detection_demo.png      # Field view with contacts
-│   └── nfl_video_overlay_thumbnail.jpg     # Video overlay sample
+│   ├── nfl_contact_detection_demo.png       # Field view with contacts
+│   ├── nfl_video_overlay_thumbnail.jpg      # Video overlay sample
+│   └── test_coverage_dashboard.png          # Test coverage dashboard
 │
 └── demo/
-    └── .gitkeep                     # Placeholder for demo videos
+    └── .gitkeep                      # Placeholder for demo videos
 ```
 
 ## 🔮 Future Enhancements
@@ -332,12 +352,34 @@ nfl-contact-detection/
 - [ ] Team-level physicality metrics
 - [ ] Optimal load management recommendations
 
+## 🧪 Testing
+
+The project includes a comprehensive test suite with **72 tests** and **78% code coverage**.
+
+![Test Coverage Dashboard](visualizations/test_coverage_dashboard.png)
+
+```bash
+make test          # Run tests
+make coverage      # Run tests with coverage report
+make lint          # Run ruff linter
+```
+
+| Module | Coverage | Tests |
+|--------|----------|-------|
+| `detection_utils.py` | 100% | 19 |
+| `nfl_contact_detector.py` | 78% | 25 |
+| `create_video_overlay.py` | 73% | 28 |
+
+CI runs automatically on push/PR via GitHub Actions across Python 3.8, 3.10, and 3.12.
+
 ## 🛠️ Tech Stack
 
 - **Language:** Python 3.8+
 - **Data Processing:** Pandas (tracking data manipulation), NumPy (distance calculations)
 - **Video Processing:** OpenCV (frame-by-frame overlay, optional)
 - **Visualization:** Matplotlib (field diagrams, contact plots)
+- **Testing:** pytest, pytest-cov, ruff
+- **CI/CD:** GitHub Actions
 - **Data Source:** NFL Next Gen Stats tracking sensors (10Hz)
 
 ## 📊 Dataset Information

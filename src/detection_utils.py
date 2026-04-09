@@ -5,9 +5,10 @@ Provides the core contact detection algorithm used by both
 NFLContactDetector and NFLVideoOverlay.
 """
 
+from typing import Dict, List, Optional
+
 import numpy as np
 import pandas as pd
-from typing import List, Dict, Optional
 
 # NFL field dimensions (yards)
 FIELD_LENGTH = 120

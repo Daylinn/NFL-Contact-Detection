@@ -4,10 +4,9 @@ Shared pytest fixtures for NFL Contact Detection tests.
 Provides synthetic DataFrames that match each module's expected schema.
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Fixtures for nfl_contact_detector.py

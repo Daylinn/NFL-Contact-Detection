@@ -11,8 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.detection_utils import find_contacts, field_to_pixel, FIELD_LENGTH, FIELD_WIDTH
-
+from src.detection_utils import FIELD_LENGTH, FIELD_WIDTH, field_to_pixel, find_contacts
 
 # ===================================================================
 # Constants
