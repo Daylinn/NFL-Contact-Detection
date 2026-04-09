@@ -25,6 +25,8 @@ from typing import Dict, List, Tuple, Optional
 import warnings
 warnings.filterwarnings('ignore')
 
+from src.detection_utils import find_contacts, field_to_pixel, FIELD_LENGTH, FIELD_WIDTH
+
 
 class NFLVideoOverlay:
     """
@@ -45,10 +47,14 @@ class NFLVideoOverlay:
             distance_threshold: Contact distance threshold (yards)
             decel_threshold: Contact deceleration threshold (yards/sec²)
         """
+        if distance_threshold < 0:
+            raise ValueError("distance_threshold must be non-negative")
+        if decel_threshold < 0:
+            raise ValueError("decel_threshold must be non-negative")
         self.distance_threshold = distance_threshold
         self.decel_threshold = decel_threshold
-        
-    def process_tracking_data(self, tracking_df: pd.DataFrame, 
+
+    def process_tracking_data(self, tracking_df: pd.DataFrame,
                              game_key: int, play_id: int) -> pd.DataFrame:
         """
         Filter and prepare tracking data for specific play.
@@ -61,6 +67,11 @@ class NFLVideoOverlay:
         Returns:
             Filtered and processed tracking data with deceleration
         """
+        required = {'game_key', 'play_id', 'nfl_player_id', 'step', 'speed'}
+        missing = required - set(tracking_df.columns)
+        if missing:
+            raise ValueError(f"Missing required columns: {missing}")
+
         # Filter to specific play
         play_data = tracking_df[
             (tracking_df['game_key'] == game_key) & 
@@ -77,45 +88,23 @@ class NFLVideoOverlay:
     def detect_contacts_at_step(self, step_data: pd.DataFrame) -> List[Dict]:
         """
         Detect contacts for a single tracking time step.
-        
+
+        Only checks pairs on opposing teams.
+
         Args:
             step_data: Tracking data for one time step
-        
+
         Returns:
             List of contact dictionaries
         """
-        contacts = []
-        
-        players = step_data[[
-            'nfl_player_id', 'x_position', 'y_position', 
-            'decel', 'jersey_number', 'team'
-        ]].dropna()
-        
-        # Check all opposing player pairs
-        for i, p1 in players.iterrows():
-            for j, p2 in players.iterrows():
-                if i >= j or p1['team'] == p2['team']:
-                    continue
-                
-                # Calculate distance
-                dist = np.sqrt(
-                    (p1['x_position'] - p2['x_position'])**2 + 
-                    (p1['y_position'] - p2['y_position'])**2
-                )
-                
-                # Check contact conditions
-                if dist <= self.distance_threshold:
-                    if p1['decel'] > self.decel_threshold or p2['decel'] > self.decel_threshold:
-                        contacts.append({
-                            'player1': p1['jersey_number'],
-                            'player2': p2['jersey_number'],
-                            'distance': dist,
-                            'max_decel': max(p1['decel'], p2['decel']),
-                            'x': (p1['x_position'] + p2['x_position']) / 2,
-                            'y': (p1['y_position'] + p2['y_position']) / 2
-                        })
-        
-        return contacts
+        return find_contacts(
+            step_data,
+            x_col='x_position', y_col='y_position',
+            decel_col='decel', player_col='jersey_number',
+            distance_threshold=self.distance_threshold,
+            decel_threshold=self.decel_threshold,
+            team_col='team', opposing_only=True,
+        )
     
     def detect_all_contacts(self, play_data: pd.DataFrame) -> Dict[int, List[Dict]]:
         """
@@ -128,9 +117,8 @@ class NFLVideoOverlay:
             Dictionary mapping step numbers to contact lists
         """
         all_contacts = {}
-        
-        for step in sorted(play_data['step'].unique()):
-            step_data = play_data[play_data['step'] == step]
+
+        for step, step_data in play_data.groupby('step', sort=True):
             contacts = self.detect_contacts_at_step(step_data)
             
             if contacts:
@@ -239,8 +227,7 @@ class NFLVideoOverlay:
         """Draw player position circles and jersey numbers."""
         for _, player in step_data.iterrows():
             # Convert field coordinates to pixel coordinates
-            px = int((player['x_position'] / 120) * width)
-            py = int((player['y_position'] / 53.3) * height)
+            px, py = field_to_pixel(player['x_position'], player['y_position'], width, height)
             
             # Team color (red=home, blue=away)
             color = (0, 0, 255) if player['team'] == 'home' else (255, 0, 0)
@@ -261,8 +248,7 @@ class NFLVideoOverlay:
         """Draw contact markers and alert banner."""
         for contact in contacts:
             # Contact location
-            cx = int((contact['x'] / 120) * width)
-            cy = int((contact['y'] / 53.3) * height)
+            cx, cy = field_to_pixel(contact['x'], contact['y'], width, height)
             
             # Yellow star marker
             cv2.drawMarker(frame, (cx, cy), (0, 255, 255), 
