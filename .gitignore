@@ -6,6 +6,11 @@ __pycache__/
 venv/
 *.egg-info/
 
+# Testing
+.coverage
+.pytest_cache/
+htmlcov/
+
 # Large files
 *.mp4
 *.avi
