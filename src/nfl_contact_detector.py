@@ -21,6 +21,8 @@ from typing import List, Dict, Tuple
 import warnings
 warnings.filterwarnings('ignore')
 
+from src.detection_utils import find_contacts, FIELD_LENGTH, FIELD_WIDTH
+
 
 class NFLContactDetector:
     """
@@ -38,9 +40,13 @@ class NFLContactDetector:
             distance_threshold: Maximum distance (yards) for contact
             decel_threshold: Minimum deceleration (yards/sec²) for impact
         """
+        if distance_threshold < 0:
+            raise ValueError("distance_threshold must be non-negative")
+        if decel_threshold < 0:
+            raise ValueError("decel_threshold must be non-negative")
         self.distance_threshold = distance_threshold
         self.decel_threshold = decel_threshold
-        
+
     def calculate_deceleration(self, tracking_df: pd.DataFrame) -> pd.DataFrame:
         """
         Calculate player deceleration from tracking data.
@@ -51,6 +57,11 @@ class NFLContactDetector:
         Returns:
             DataFrame with added 'decel' column
         """
+        required = {'gameKey', 'playID', 'player', 'time', 's'}
+        missing = required - set(tracking_df.columns)
+        if missing:
+            raise ValueError(f"Missing required columns: {missing}")
+
         df = tracking_df.copy()
         df = df.sort_values(['gameKey', 'playID', 'player', 'time'])
         
@@ -64,11 +75,11 @@ class NFLContactDetector:
     def detect_contacts_in_frame(self, frame_data: pd.DataFrame) -> List[Dict]:
         """
         Detect contacts in a single frame.
-        
+
         Args:
             frame_data: DataFrame with player positions for one time step
                        Required columns: [player, x, y, decel]
-        
+
         Returns:
             List of contact dictionaries with:
                 - player1, player2: Player identifiers
@@ -76,33 +87,12 @@ class NFLContactDetector:
                 - max_decel: Maximum deceleration of pair (yards/sec²)
                 - x, y: Contact location coordinates
         """
-        contacts = []
-        
-        # Get players with valid data
-        players = frame_data[['player', 'x', 'y', 'decel']].dropna()
-        
-        # Check all player pairs
-        for i, p1 in players.iterrows():
-            for j, p2 in players.iterrows():
-                if i >= j:  # Avoid duplicates and self-comparison
-                    continue
-                
-                # Calculate euclidean distance
-                distance = np.sqrt((p1['x'] - p2['x'])**2 + (p1['y'] - p2['y'])**2)
-                
-                # Check contact conditions
-                if distance <= self.distance_threshold:
-                    if p1['decel'] > self.decel_threshold or p2['decel'] > self.decel_threshold:
-                        contacts.append({
-                            'player1': p1['player'],
-                            'player2': p2['player'],
-                            'distance': distance,
-                            'max_decel': max(p1['decel'], p2['decel']),
-                            'x': (p1['x'] + p2['x']) / 2,
-                            'y': (p1['y'] + p2['y']) / 2
-                        })
-        
-        return contacts
+        return find_contacts(
+            frame_data,
+            x_col='x', y_col='y', decel_col='decel', player_col='player',
+            distance_threshold=self.distance_threshold,
+            decel_threshold=self.decel_threshold,
+        )
     
     def detect_contacts_in_play(self, play_tracking: pd.DataFrame) -> pd.DataFrame:
         """
@@ -119,8 +109,7 @@ class NFLContactDetector:
         
         # Detect contacts for each time step
         all_contacts = []
-        for time in sorted(play_data['time'].unique()):
-            frame_data = play_data[play_data['time'] == time]
+        for time, frame_data in play_data.groupby('time', sort=True):
             frame_contacts = self.detect_contacts_in_frame(frame_data)
             
             for contact in frame_contacts:
@@ -177,16 +166,16 @@ class NFLContactDetector:
     def _draw_field(self, ax):
         """Draw NFL field background."""
         ax.set_facecolor('#2C5F2D')
-        ax.set_xlim([0, 120])
-        ax.set_ylim([0, 53.3])
+        ax.set_xlim([0, FIELD_LENGTH])
+        ax.set_ylim([0, FIELD_WIDTH])
         ax.set_xlabel('Yards', fontsize=12, fontweight='bold', color='white')
         ax.set_ylabel('Width (yards)', fontsize=12, fontweight='bold', color='white')
         ax.set_title('Player Positions & Contact Detection', fontsize=14, fontweight='bold', color='white')
         
         # Field lines
-        for yard in range(0, 121, 10):
+        for yard in range(0, FIELD_LENGTH + 1, 10):
             ax.axvline(yard, color='white', alpha=0.3, linewidth=0.8)
-        ax.axhline(53.3/2, color='white', alpha=0.5, linewidth=1.5)
+        ax.axhline(FIELD_WIDTH / 2, color='white', alpha=0.5, linewidth=1.5)
         ax.tick_params(colors='white')
     
     def _draw_players(self, ax, frame_data):

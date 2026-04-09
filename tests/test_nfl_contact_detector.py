@@ -8,15 +8,14 @@ Covers:
   - Visualization smoke tests
 """
 
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+import os
 
 import numpy as np
 import pandas as pd
 import pytest
 from unittest.mock import patch, MagicMock
 
-from nfl_contact_detector import NFLContactDetector
+from src.nfl_contact_detector import NFLContactDetector
 
 
 # ===================================================================

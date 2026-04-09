@@ -10,15 +10,12 @@ Covers:
   - Thumbnail extraction
 """
 
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
 import numpy as np
 import pandas as pd
 import pytest
 from unittest.mock import patch, MagicMock, PropertyMock
 
-from create_video_overlay import NFLVideoOverlay
+from src.create_video_overlay import NFLVideoOverlay
 
 
 # ===================================================================
